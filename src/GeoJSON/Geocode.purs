@@ -1,37 +1,27 @@
 module GeoJSON.Geocode
-    ( GeocodingService
-    , GeocodingError(..)
+    ( GeocodingError(..)
     , NominatimResult
     , Address(..)
     , geocodeAddressNominatim
     , geocodeLocation
     , geocodeLocation'
-    , openStreetMapNominatim
     )
 where
 
 import Prelude
 
-import Affjax (Error(..), request, defaultRequest, printError)
-import Affjax.ResponseFormat (json)
+import Affjax (Error(..), printError, request)
 import Data.Argonaut (Json, (.:), (.:?))
 import Data.Argonaut as A
-import Data.Array (filter, head, intercalate, null, (:))
+import Data.Array (filter, head, intercalate, null)
 import Data.Either (Either(..), note)
 import Data.Foldable (oneOf)
-import Data.HTTP.Method (Method(..))
-import Data.Lens (set)
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe)
 import Data.Traversable (traverse)
-import Data.Tuple (Tuple(..))
 import Effect.Aff (Aff)
 import GeoJSON.GeoJSON (Feature, Geometry, decodeFeatureCollection)
-import Text.Parsing.Parser (runParser)
-import URI.AbsoluteURI (AbsoluteURIParseOptions, AbsoluteURIPrintOptions, HierPath, Host, Path, Port, Query, UserInfo, _query)
-import URI.AbsoluteURI (print, parser) as URI
-import URI.Extra.QueryPairs (QueryPairs(..), keyFromString, print, valueFromString) as Q
-import URI.HostPortPair (HostPortPair)
-import URI.HostPortPair as HPP
+import GeoJSON.GeocodingService (GeocodingService)
+
 
 data GeocodingError
     = DeserialisationError String
@@ -43,12 +33,6 @@ instance showGeocodingError :: Show GeocodingError where
         DeserialisationError x -> "Could not deserialize GeoJSON: " <> show x
         UnknownError x -> "Unknown error: " <> x
         NoResultsError -> "No results for query"
-
-type GeocodingService =
-    { baseURL :: String
-    , locationParam :: String
-    , defaultQuery :: Q.QueryPairs String String
-    }
 
 type NominatimResult =
     { geometry   :: Geometry
@@ -72,9 +56,9 @@ type Address =
     , continent      :: Maybe String
     }
 
-geocodeAddressNominatim :: Array String -> Aff (Either GeocodingError NominatimResult)
-geocodeAddressNominatim location = do
-    result <- geocodeLocation openStreetMapNominatim location
+geocodeAddressNominatim :: GeocodingService -> Array String -> Aff (Either GeocodingError NominatimResult)
+geocodeAddressNominatim h location = do
+    result <- geocodeLocation h location
     case result of
       Right feature -> do
         case decodeAddressNominatim feature.properties of
@@ -117,22 +101,6 @@ decodeAddressNominatim json = do
     }
 
 
--- TODO MapTiler
--- See: https://cloud.maptiler.com/geocoding/
-
--- | Open Street Map Nominatim
-openStreetMapNominatim :: GeocodingService
-openStreetMapNominatim =
-    { baseURL: "https://nominatim.openstreetmap.org/search"
-    , locationParam: "q"
-    , defaultQuery: Q.QueryPairs
-        [ Tuple "format" (Just "geojson")
-        , Tuple "addressdetails" (Just "1")
-        , Tuple "accept-language" (Just "fr")
-        ]
-    }
-
-
 geocodeLocation :: GeocodingService -> Array String -> Aff (Either GeocodingError Feature)
 geocodeLocation h location = do
     r <- geocodeLocation' h location
@@ -142,47 +110,14 @@ geocodeLocation h location = do
 
 geocodeLocation' :: GeocodingService -> Array String -> Aff (Either GeocodingError (Array Feature))
 geocodeLocation' h location = do
-    case runParser h.baseURL (URI.parser parseOptions) of
-        Right url -> do
-            let locParam = Tuple h.locationParam (Just (intercalate ", " (filter (_ /= "") location)))
-            let (Q.QueryPairs defQ) = h.defaultQuery
-            let newQ = Q.print Q.keyFromString Q.valueFromString (Q.QueryPairs (locParam : defQ))
-            let req = defaultRequest
-                    { url = URI.print printOptions (set _query (Just newQ) url)
-                    , method = Left GET
-                    , responseFormat = json
-                    , headers = []
-                        -- [ RequestHeader "User-Agent" "http://github.com/mjepronk/purescript-geojson/" ]
-                    }
-            res <- request req
-            case res of
-                Right resp -> do
-                    case decodeFeatureCollection resp.body of
-                        Right x
-                            | null x.features -> pure (Left NoResultsError)
-                            | otherwise -> pure (Right x.features )
-                        Left err -> pure (Left (DeserialisationError (show err)))
-                Left (ResponseBodyError err _) -> pure (Left (DeserialisationError (show err)))
-                Left err -> pure (Left (UnknownError (printError err)))
-        Left err -> pure (Left (UnknownError (show err)))
-
-  where
-    parseOptions
-        :: Record (AbsoluteURIParseOptions UserInfo (HostPortPair Host Port) Path HierPath Query ())
-    parseOptions =
-        { parseUserInfo: pure
-        , parseHosts: HPP.parser pure pure
-        , parsePath: pure
-        , parseHierPath: pure
-        , parseQuery: pure
-        }
-
-    printOptions
-        :: Record (AbsoluteURIPrintOptions UserInfo (HostPortPair Host Port) Path HierPath Query ())
-    printOptions =
-        { printUserInfo: identity
-        , printHosts: HPP.print identity identity
-        , printPath: identity
-        , printHierPath: identity
-        , printQuery: identity
-        }
+    let location' = intercalate ", " (filter (_ /= "") location)
+    res <- request (h location')
+    case res of
+        Right resp -> do
+            case decodeFeatureCollection resp.body of
+                Right x
+                    | null x.features -> pure (Left NoResultsError)
+                    | otherwise -> pure (Right x.features )
+                Left err -> pure (Left (DeserialisationError (show err)))
+        Left (ResponseBodyError err _) -> pure (Left (DeserialisationError (show err)))
+        Left err -> pure (Left (UnknownError (printError err)))
