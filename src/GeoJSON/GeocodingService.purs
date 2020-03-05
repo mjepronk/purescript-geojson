@@ -2,6 +2,7 @@ module GeoJSON.GeocodingService
     ( GeocodingService
     , serviceOSMNominatim
     , serviceMapTiler
+    , serviceMapBox
     , serviceAdresseGouvFr
     , ServiceURL
     , parseServiceURL
@@ -49,13 +50,25 @@ serviceOSMNominatim language location =
     in  mkServiceRequest url
 
 -- MapTiler
--- Specify the key.
+-- Specify the key and an optional language.
 -- See: https://cloud.maptiler.com/geocoding/
-serviceMapTiler :: String -> GeocodingService
-serviceMapTiler key location =
+serviceMapTiler :: String -> Maybe String -> GeocodingService
+serviceMapTiler key language location =
     let url = unsafeParseServiceURL "https://api.maptiler.com/geocoding/"
             # addPath (location <> ".json")
             # addQueryPair "key" key
+            # maybe identity (addQueryPair "language") language
+    in  mkServiceRequest url
+
+-- MapBox
+-- Specify the key and an optional language.
+-- See: https://docs.mapbox.com/api/search/
+serviceMapBox :: String -> Maybe String -> GeocodingService
+serviceMapBox key language location =
+    let url = unsafeParseServiceURL "https://api.mapbox.com/geocoding/v5/mapbox.places/"
+            # addPath (location <> ".json")
+            # addQueryPair "access_token" key
+            # maybe identity (addQueryPair "language") language
     in  mkServiceRequest url
 
 -- | API Adresse
@@ -88,7 +101,7 @@ addPath path = over (URI._hierPart <<< URI._path) addPath'
         case unsnoc xs of
             Just { init, last }
                 | last == PS.segmentFromString "" -> init <> [PS.segmentFromString path]
-                | otherwise  -> xs <> [PS.segmentFromString path]
+                | otherwise -> xs <> [PS.segmentFromString path]
             Nothing -> [PS.segmentFromString path]
 
 parseServiceURL :: String -> Maybe ServiceURL
