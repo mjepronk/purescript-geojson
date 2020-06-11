@@ -9,7 +9,7 @@ You can edit this file as you like.
     , "console"
     , "effect"
     , "psci-support"
-    , "uri"
+    , "web-url"
     ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]

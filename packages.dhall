@@ -119,10 +119,17 @@ let additions =
 
 
 let upstream =
-      https://github.com/purescript/package-sets/releases/download/psc-0.13.6-20200127/packages.dhall sha256:06a623f48c49ea1c7675fdf47f81ddb02ae274558e29f511efae1df99ea92fb8
+      https://github.com/purescript/package-sets/releases/download/psc-0.13.6-20200507/packages.dhall sha256:9c1e8951e721b79de1de551f31ecb5a339e82bbd43300eb5ccfb1bf8cf7bbd62
 
 let overrides = {=}
 
-let additions = {=}
+let additions =
+      { web-url =
+        { dependencies =
+          [ "maybe", "partial", "prelude", "psci-support", "spec", "tuples" ]
+        , repo = "https://github.com/mjepronk/purescript-web-url.git"
+        , version = "v1.0.1"
+        }
+      }
 
 in  upstream // overrides // additions
