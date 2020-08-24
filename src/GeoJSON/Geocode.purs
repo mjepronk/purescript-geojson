@@ -11,7 +11,7 @@ where
 import Prelude
 
 import Affjax (Error(..), printError, request)
-import Data.Argonaut (Json, (.:), (.:?))
+import Data.Argonaut (Json, JsonDecodeError, (.:), (.:?))
 import Data.Argonaut as A
 import Data.Array (filter, head, intercalate, null)
 import Data.Either (Either(..), note)
@@ -68,14 +68,14 @@ geocodeAddressNominatim h location = do
                 , properties: feature.properties
                 , address: address
                 }
-          Left str -> pure (Left (DeserialisationError ("Nominatim: " <> str)))
+          Left err -> pure (Left (DeserialisationError (A.printJsonDecodeError err)))
       Left err -> pure (Left err)
 
 
 -- Decode an address as specified in the Nominatim API. We map several keys to a
 -- simpler model. This is not perfect, but I think at least slightly more useful
 -- than the original.
-decodeAddressNominatim :: Json -> Either String Address
+decodeAddressNominatim :: Json -> Either JsonDecodeError Address
 decodeAddressNominatim json = do
     r <- A.decodeJson json
     x <- r .: "address"

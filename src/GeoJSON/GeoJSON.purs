@@ -5,7 +5,7 @@ module GeoJSON.GeoJSON where
 
 import Prelude
 
-import Data.Argonaut (Json, (.:), (:=), (~>))
+import Data.Argonaut (Json, JsonDecodeError, (.:), (:=), (~>))
 import Data.Argonaut as A
 import Data.Array (head, tail)
 import Data.Either (Either(..), note)
@@ -114,5 +114,5 @@ decodeGeometry json = do
             pure (Point c)
         _ -> Left InvalidGeometry
 
-mapError :: forall a. Either String a -> Either GeoJsonError a
-mapError = over _Left DecodeJsonError
+mapError :: forall a. Either JsonDecodeError a -> Either GeoJsonError a
+mapError = over _Left (DecodeJsonError <<< A.printJsonDecodeError)
